@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const FAL_KEY = process.env.FAL_KEY;
 const DAILY_BUDGET_USD = parseFloat(process.env.DAILY_BUDGET_USD || '10.00');
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const UPSCALE_PRICE_USD = parseFloat(process.env.UPSCALE_PRICE_USD || '5.00');
+const UPSCALE_PRICE_USD = parseFloat(process.env.UPSCALE_PRICE_USD || '3.00');
 const stripe = STRIPE_SECRET_KEY ? require('stripe')(STRIPE_SECRET_KEY) : null;
 
 // GPT Image 2 edit, high quality, up to 4K output.
