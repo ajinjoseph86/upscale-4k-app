@@ -28,8 +28,9 @@ const SPEND_FILE = path.join(DATA_DIR, 'spend.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const PAID_FILE = path.join(DATA_DIR, 'paid.json');
 const GENERATED_DIR = process.env.GENERATED_DIR || path.join(__dirname, 'public', 'generated');
+const PRIVATE_DIR = process.env.PRIVATE_DIR || path.join(DATA_DIR, 'private');
 
-for (const dir of [DATA_DIR, GENERATED_DIR]) {
+for (const dir of [DATA_DIR, GENERATED_DIR, PRIVATE_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -284,9 +285,9 @@ app.get('/api/verify-payment', async (req, res) => {
   if (!entry) {
     return res.status(404).json({ error: 'Original image not found.' });
   }
-  if (entry.upscaledUrl) {
+  if (entry.upscaledFile) {
     await markPaid({ uploadId, clientId: req.clientId, sessionId });
-    return res.json({ paid: true, uploadId, upscaledUrl: entry.upscaledUrl });
+    return res.json({ paid: true, uploadId, upscaledUrl: `/api/preview/${uploadId}` });
   }
 
   try {
@@ -324,20 +325,33 @@ app.get('/api/verify-payment', async (req, res) => {
     }
 
     const upscaledFile = `${uploadId}-4k.png`;
-    await downloadToFile(outputImage.url, path.join(GENERATED_DIR, upscaledFile));
+    await downloadToFile(outputImage.url, path.join(PRIVATE_DIR, upscaledFile));
     await addSpend(ESTIMATED_UPSCALE_COST_USD);
 
-    entry.upscaledUrl = `/generated/${upscaledFile}`;
+    entry.upscaledFile = upscaledFile;
     await writeJson(HISTORY_FILE, history);
     await markPaid({ uploadId, clientId: req.clientId, sessionId });
 
-    res.json({ paid: true, uploadId, upscaledUrl: entry.upscaledUrl });
+    res.json({ paid: true, uploadId, upscaledUrl: `/api/preview/${uploadId}` });
   } catch (err) {
     console.error('verify-payment upscale error:', err);
     res.status(500).json({
       error: 'Payment succeeded but the upscale failed. Contact support for a manual delivery.',
     });
   }
+});
+
+app.get('/api/preview/:uploadId', async (req, res) => {
+  const { uploadId } = req.params;
+  if (!(await isPaid(uploadId, req.clientId))) {
+    return res.status(402).json({ error: 'Payment required.' });
+  }
+  const history = await readJson(HISTORY_FILE, []);
+  const entry = history.find((h) => h.id === uploadId && h.clientId === req.clientId);
+  if (!entry?.upscaledFile) {
+    return res.status(404).json({ error: 'Upscaled image not found.' });
+  }
+  res.sendFile(path.join(PRIVATE_DIR, entry.upscaledFile));
 });
 
 app.get('/api/download/:uploadId', async (req, res) => {
@@ -347,11 +361,11 @@ app.get('/api/download/:uploadId', async (req, res) => {
   }
   const history = await readJson(HISTORY_FILE, []);
   const entry = history.find((h) => h.id === uploadId && h.clientId === req.clientId);
-  if (!entry?.upscaledUrl) {
+  if (!entry?.upscaledFile) {
     return res.status(404).json({ error: 'Upscaled image not found.' });
   }
   res.download(
-    path.join(GENERATED_DIR, path.basename(entry.upscaledUrl)),
+    path.join(PRIVATE_DIR, entry.upscaledFile),
     `upscaled-4k-${uploadId.slice(0, 8)}.png`
   );
 });
